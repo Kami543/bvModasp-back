@@ -21,8 +21,8 @@
     "esModuleInterop": true,
     "resolveJsonModule": true,
     "ignoreDeprecations": "6.0",
-    "types": ["node"]  // <-- ADD THIS LINE
-  },
+    "types": ["node", "multer"]
+    },
   "include": ["src/**/*"],
   "exclude": ["node_modules", "dist", "test", "**/*spec.ts"]
 }

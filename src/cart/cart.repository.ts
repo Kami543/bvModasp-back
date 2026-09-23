@@ -1,7 +1,18 @@
+// src/cart/cart.repository.ts
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { CartItem } from '@prisma/client';
 import { BaseRepository } from '../common/utils/baseRepository';
+
+const PRODUTO_SELECT = {
+  id: true,
+  nome: true,
+  preco: true,
+  slug: true,
+  categoria: true,
+  imagem: true,
+  estoque: true,
+} as const;
 
 @Injectable()
 export class CartRepository extends BaseRepository<CartItem> {
@@ -16,7 +27,7 @@ export class CartRepository extends BaseRepository<CartItem> {
   async findCartByUser(userId: string) {
     return this.model.findMany({
       where: { userId },
-      include: { produto: true },
+      include: { produto: { select: PRODUTO_SELECT } },
       orderBy: { createdAt: 'desc' },
     });
   }
@@ -24,24 +35,24 @@ export class CartRepository extends BaseRepository<CartItem> {
   async findCartItem(
     userId: string,
     produtoId: string,
-    tamanho?: string,
-    cor?: string,
+    tamanho?: string | null,
+    cor?: string | null,
   ) {
     return this.model.findFirst({
       where: {
         userId,
         produtoId,
-        tamanho: tamanho || null,
-        cor: cor || null,
+        tamanho: tamanho ?? null,
+        cor: cor ?? null,
       },
-      include: { produto: true },
+      include: { produto: { select: PRODUTO_SELECT } },
     });
   }
 
   async findByIdAndUser(id: string, userId: string) {
     return this.model.findFirst({
       where: { id, userId },
-      include: { produto: true },
+      include: { produto: { select: PRODUTO_SELECT } },
     });
   }
 
@@ -60,7 +71,7 @@ export class CartRepository extends BaseRepository<CartItem> {
         tamanho: data.tamanho,
         cor: data.cor,
       },
-      include: { produto: true },
+      include: { produto: { select: PRODUTO_SELECT } },
     });
   }
 
@@ -68,7 +79,15 @@ export class CartRepository extends BaseRepository<CartItem> {
     return this.model.update({
       where: { id },
       data: { quantidade },
-      include: { produto: true },
+      include: { produto: { select: PRODUTO_SELECT } },
+    });
+  }
+
+  async incrementQuantidade(id: string, delta: number) {
+    return this.model.update({
+      where: { id },
+      data: { quantidade: { increment: delta } },
+      include: { produto: { select: PRODUTO_SELECT } },
     });
   }
 
@@ -76,14 +95,16 @@ export class CartRepository extends BaseRepository<CartItem> {
     return this.model.delete({ where: { id } });
   }
 
+  async removeItemByUser(id: string, userId: string) {
+    return this.model.deleteMany({ where: { id, userId } });
+  }
+
   async clearCart(userId: string) {
     return this.model.deleteMany({ where: { userId } });
   }
 
   async isProductInCart(userId: string, produtoId: string): Promise<boolean> {
-    const count = await this.model.count({
-      where: { userId, produtoId },
-    });
+    const count = await this.model.count({ where: { userId, produtoId } });
     return count > 0;
   }
 
@@ -98,20 +119,17 @@ export class CartRepository extends BaseRepository<CartItem> {
   async getCartSubtotal(userId: string): Promise<number> {
     const items = await this.model.findMany({
       where: { userId },
-      include: {
-        produto: { select: { preco: true } }
-      },
+      include: { produto: { select: { preco: true } } },
     });
 
     return items.reduce((total, item) => {
-      return total + (Number(item.produto.preco) * item.quantidade);
+      return total + Number(item.produto.preco) * item.quantidade;
     }, 0);
   }
 
   async removeItems(itemIds: string[]): Promise<void> {
-    await this.model.deleteMany({
-      where: { id: { in: itemIds } },
-    });
+    if (!itemIds || itemIds.length === 0) return;
+    await this.model.deleteMany({ where: { id: { in: itemIds } } });
   }
 
   async findCartSummary(userId: string) {
@@ -128,8 +146,8 @@ export class CartRepository extends BaseRepository<CartItem> {
             imagem: true,
             slug: true,
             estoque: true,
-          }
-        }
+          },
+        },
       },
     });
   }

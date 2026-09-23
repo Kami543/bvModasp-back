@@ -13,16 +13,7 @@ import {
   HttpCode,
   HttpStatus,
 } from '@nestjs/common';
-import {
-  ApiTags,
-  ApiBearerAuth,
-  ApiOperation,
-  ApiResponse,
-  ApiBody,
-  ApiParam,
-  ApiQuery,
-  ApiExtraModels,
-} from '@nestjs/swagger';
+import { ApiTags, ApiBearerAuth, ApiOperation } from '@nestjs/swagger';
 import { AuthGuard } from '@nestjs/passport';
 import { NotificacoesService } from './notificacoes.service';
 import { CreateNotificacaoDto } from './dto/create-notificacao.dto';
@@ -31,199 +22,72 @@ import { CreateNotificacaoDto } from './dto/create-notificacao.dto';
 @ApiBearerAuth('access-token')
 @Controller('notificacoes')
 @UseGuards(AuthGuard('jwt'))
-@ApiExtraModels(CreateNotificacaoDto)
 export class NotificacoesController {
   constructor(private readonly notificacoesService: NotificacoesService) {}
 
   @Post()
   @HttpCode(HttpStatus.CREATED)
-  @ApiOperation({
-    summary: 'Criar notificação para usuário',
-    description: 'Cria uma nova notificação para o usuário autenticado',
-  })
-  @ApiBody({ type: CreateNotificacaoDto })
-  @ApiResponse({
-    status: 201,
-    description: 'Notificação criada com sucesso',
-    schema: {
-      example: {
-        id: 'notificacao_id',
-        userId: 'user_id',
-        tipo: 'sistema',
-        titulo: 'Bem-vindo!',
-        mensagem: 'Seja bem-vindo ao sistema',
-        lida: false,
-        createdAt: '2024-01-01T00:00:00.000Z',
-      },
-    },
-  })
-  @ApiResponse({ status: 400, description: 'Dados inválidos' })
-  @ApiResponse({ status: 401, description: 'Não autorizado' })
+  @ApiOperation({ summary: 'Criar notificação para usuário autenticado' })
   async create(@Req() req: any, @Body() dto: CreateNotificacaoDto) {
     return this.notificacoesService.create(req.user.userId, dto);
   }
 
-  @Get()
-  @ApiOperation({
-    summary: 'Listar notificações do usuário',
-    description: 'Retorna as notificações do usuário com paginação e filtros',
-  })
-  @ApiQuery({ name: 'page', required: false, example: 1, description: 'Número da página' })
-  @ApiQuery({ name: 'limit', required: false, example: 20, description: 'Itens por página' })
-  @ApiQuery({
-    name: 'apenasNaoLidas',
-    required: false,
-    example: false,
-    description: 'Filtrar apenas não lidas',
-  })
-  @ApiResponse({
-    status: 200,
-    description: 'Notificações listadas com sucesso',
-    schema: {
-      example: {
-        data: [
-          {
-            id: 'notificacao_id',
-            tipo: 'sistema',
-            titulo: 'Pedido criado',
-            mensagem: 'Seu pedido foi criado',
-            lida: false,
-            createdAt: '2024-01-01T00:00:00.000Z',
-          },
-        ],
-        total: 5,
-        page: 1,
-        limit: 20,
-        naoLidas: 2,
-        mensagem: 'Você tem 2 notificações não lidas',
-      },
-    },
-  })
-  @ApiResponse({ status: 401, description: 'Não autorizado' })
-  async findAll(
-    @Req() req: any,
-    @Query('page') page?: number,
-    @Query('limit') limit?: number,
-    @Query('apenasNaoLidas') apenasNaoLidas?: string,
-  ) {
-    return this.notificacoesService.findAll(
-      req.user.userId,
-      page,
-      limit,
-      apenasNaoLidas === 'true',
-    );
-  }
-
+  // ─── Rotas específicas (declarar ANTES de :id) ─────────────────
   @Get('unread/count')
-  @ApiOperation({
-    summary: 'Contar notificações não lidas',
-    description: 'Retorna o total de notificações não lidas do usuário',
-  })
-  @ApiResponse({
-    status: 200,
-    description: 'Contagem retornada com sucesso',
-    schema: { example: { count: 3, mensagem: 'Você tem 3 notificações não lidas' } },
-  })
-  @ApiResponse({ status: 401, description: 'Não autorizado' })
+  @ApiOperation({ summary: 'Contar notificações não lidas' })
   async countUnread(@Req() req: any) {
     const count = await this.notificacoesService.getUnreadCount(req.user.userId);
-    return {
-      count,
-      mensagem: `Você tem ${count} ${count === 1 ? 'notificação não lida' : 'notificações não lidas'}`,
-    };
+    return { count };
   }
 
   @Get('stats')
-  @ApiOperation({
-    summary: 'Estatísticas de notificações',
-    description: 'Retorna estatísticas detalhadas das notificações do usuário',
-  })
-  @ApiResponse({
-    status: 200,
-    description: 'Estatísticas retornadas com sucesso',
-    schema: {
-      example: {
-        totalPorTipo: [
-          { tipo: 'sistema', _count: 10 },
-          { tipo: 'entrega', _count: 5 },
-        ],
-        ultimasSemana: 3,
-        totalNaoLidas: 2,
-        totalNotificacoes: 18,
-      },
-    },
-  })
-  @ApiResponse({ status: 401, description: 'Não autorizado' })
+  @ApiOperation({ summary: 'Estatísticas de notificações' })
   async getStats(@Req() req: any) {
     return this.notificacoesService.getStats(req.user.userId);
   }
 
   @Put('mark-all-read')
-  @ApiOperation({
-    summary: 'Marcar todas notificações como lidas',
-    description: 'Marca todas as notificações do usuário como lidas',
-  })
-  @ApiResponse({
-    status: 200,
-    description: 'Todas notificações marcadas como lidas',
-    schema: { example: { count: 3, mensagem: '3 notificações foram marcadas como lidas' } },
-  })
-  @ApiResponse({ status: 401, description: 'Não autorizado' })
+  @ApiOperation({ summary: 'Marcar todas notificações como lidas' })
   async markAllAsRead(@Req() req: any) {
     const { count } = await this.notificacoesService.markAllAsRead(req.user.userId);
-    return {
-      count,
-      mensagem: `${count} ${count === 1 ? 'notificação foi' : 'notificações foram'} marcada${count === 1 ? '' : 's'} como lida${count === 1 ? '' : 's'}`,
-    };
-  }
-
-  @Put(':id/read')
-  @ApiOperation({
-    summary: 'Marcar notificação como lida',
-    description: 'Marca uma notificação específica como lida',
-  })
-  @ApiParam({ name: 'id', description: 'ID da notificação', example: 'cm8k3x...' })
-  @ApiResponse({
-    status: 200,
-    description: 'Notificação marcada como lida',
-    schema: { example: { id: 'notificacao_id', lida: true, updatedAt: '2024-01-01T00:00:00.000Z' } },
-  })
-  @ApiResponse({ status: 401, description: 'Não autorizado' })
-  @ApiResponse({ status: 404, description: 'Notificação não encontrada' })
-  async markAsRead(@Req() req: any, @Param('id') id: string) {
-    return this.notificacoesService.markAsRead(req.user.userId, id);
+    return { count };
   }
 
   @Delete('read/all')
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({
-    summary: 'Deletar todas notificações lidas',
-    description: 'Remove permanentemente todas as notificações já lidas do usuário',
-  })
-  @ApiResponse({
-    status: 200,
-    description: 'Notificações lidas removidas',
-    schema: { example: { count: 5, mensagem: '5 notificações lidas foram removidas' } },
-  })
-  @ApiResponse({ status: 401, description: 'Não autorizado' })
+  @ApiOperation({ summary: 'Deletar todas notificações lidas' })
   async deleteAllRead(@Req() req: any) {
     const { count } = await this.notificacoesService.deleteAllRead(req.user.userId);
-    return {
-      count,
-      mensagem: `${count} ${count === 1 ? 'notificação lida foi' : 'notificações lidas foram'} removida${count === 1 ? '' : 's'}`,
-    };
+    return { count };
+  }
+
+  // ─── Listagem ───────────────────────────────────────────────
+  @Get()
+  @ApiOperation({ summary: 'Listar notificações do usuário' })
+  async findAll(
+    @Req() req: any,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+    @Query('apenasNaoLidas') apenasNaoLidas?: string,
+  ) {
+    return this.notificacoesService.findAll(
+      req.user.userId,
+      page ? parseInt(page, 10) : 1,
+      limit ? parseInt(limit, 10) : 20,
+      apenasNaoLidas === 'true',
+    );
+  }
+
+  // ─── Rotas com :id (por último) ─────────────────────────────
+  @Put(':id/read')
+  @ApiOperation({ summary: 'Marcar notificação como lida' })
+  async markAsRead(@Req() req: any, @Param('id') id: string) {
+    return this.notificacoesService.markAsRead(req.user.userId, id);
   }
 
   @Delete(':id')
   @HttpCode(HttpStatus.NO_CONTENT)
-  @ApiOperation({
-    summary: 'Deletar notificação',
-    description: 'Remove uma notificação específica',
-  })
-  @ApiParam({ name: 'id', description: 'ID da notificação', example: 'cm8k3x...' })
-  @ApiResponse({ status: 204, description: 'Notificação deletada com sucesso' })
-  @ApiResponse({ status: 401, description: 'Não autorizado' })
-  @ApiResponse({ status: 404, description: 'Notificação não encontrada' })
+  @ApiOperation({ summary: 'Deletar notificação' })
   async delete(@Req() req: any, @Param('id') id: string) {
     return this.notificacoesService.delete(req.user.userId, id);
   }

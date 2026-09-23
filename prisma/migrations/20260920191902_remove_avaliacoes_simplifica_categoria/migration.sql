@@ -17,7 +17,7 @@ CREATE TYPE "TipoNotificacao" AS ENUM ('promo', 'entrega', 'limitado', 'sistema'
 CREATE TYPE "GatewayPagamento" AS ENUM ('MERCADO_PAGO', 'STRIPE', 'PAGSEGURO', 'PIX_DIRETO', 'BOLETO_DIRETO');
 
 -- CreateEnum
-CREATE TYPE "CategoriaProduto" AS ENUM ('Feminino', 'Masculino', 'Acessorios');
+CREATE TYPE "CategoriaProduto" AS ENUM ('Feminino');
 
 -- CreateTable
 CREATE TABLE "users" (
@@ -239,19 +239,6 @@ CREATE TABLE "device_fingerprints" (
 );
 
 -- CreateTable
-CREATE TABLE "avaliacoes" (
-    "id" TEXT NOT NULL,
-    "nota" INTEGER NOT NULL,
-    "titulo" TEXT,
-    "comentario" TEXT,
-    "userId" TEXT NOT NULL,
-    "produtoId" TEXT NOT NULL,
-    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-
-    CONSTRAINT "avaliacoes_pkey" PRIMARY KEY ("id")
-);
-
--- CreateTable
 CREATE TABLE "notificacoes" (
     "id" TEXT NOT NULL,
     "tipo" "TipoNotificacao" NOT NULL,
@@ -407,12 +394,6 @@ CREATE INDEX "device_fingerprints_userId_idx" ON "device_fingerprints"("userId")
 CREATE INDEX "device_fingerprints_fingerprint_idx" ON "device_fingerprints"("fingerprint");
 
 -- CreateIndex
-CREATE INDEX "avaliacoes_produtoId_nota_idx" ON "avaliacoes"("produtoId", "nota");
-
--- CreateIndex
-CREATE UNIQUE INDEX "avaliacoes_userId_produtoId_key" ON "avaliacoes"("userId", "produtoId");
-
--- CreateIndex
 CREATE INDEX "notificacoes_userId_idx" ON "notificacoes"("userId");
 
 -- CreateIndex
@@ -479,14 +460,7 @@ ALTER TABLE "webhook_logs" ADD CONSTRAINT "webhook_logs_transacaoId_fkey" FOREIG
 ALTER TABLE "device_fingerprints" ADD CONSTRAINT "device_fingerprints_userId_fkey" FOREIGN KEY ("userId") REFERENCES "users"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "avaliacoes" ADD CONSTRAINT "avaliacoes_produtoId_fkey" FOREIGN KEY ("produtoId") REFERENCES "produtos"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
-
--- AddForeignKey
-ALTER TABLE "avaliacoes" ADD CONSTRAINT "avaliacoes_userId_fkey" FOREIGN KEY ("userId") REFERENCES "users"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
-
--- AddForeignKey
 ALTER TABLE "notificacoes" ADD CONSTRAINT "notificacoes_userId_fkey" FOREIGN KEY ("userId") REFERENCES "users"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "refresh_tokens" ADD CONSTRAINT "refresh_tokens_userId_fkey" FOREIGN KEY ("userId") REFERENCES "users"("id") ON DELETE CASCADE ON UPDATE CASCADE;
-

@@ -1,18 +1,19 @@
+// src/cart/cart.module.ts
 import { Module } from '@nestjs/common';
 import { CartService } from './cart.service';
-import { CartController } from './cart.controller';   // 👈 importe o controller
+import { CartController } from './cart.controller';
 import { CartRepository } from './cart.repository';
 import { ProdutoRepository } from '../produto/produto.repository';
-import { PrismaService } from '../prisma/prisma.service';
+import { PrismaModule } from '../prisma/prisma.module';
 
 @Module({
-  controllers: [CartController],    // 👈 ADICIONE ESTA LINHA
+  imports: [PrismaModule],
+  controllers: [CartController],
   providers: [
     CartService,
     CartRepository,
     ProdutoRepository,
-    PrismaService,
   ],
-  exports: [CartService],
+  exports: [CartService, CartRepository],
 })
 export class CartModule {}

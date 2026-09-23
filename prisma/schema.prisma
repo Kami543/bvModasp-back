@@ -1,12 +1,12 @@
 generator client {
   provider      = "prisma-client-js"
-  binaryTargets = ["native", "linux-musl-openssl-3.0.x"]
+  binaryTargets = ["native", "linux-musl-openssl-3.0.x", "linux-musl"]
 }
 
 datasource db {
-  provider  = "postgresql"
-  url       = env("DATABASE_URL")
-  directUrl = env("DIRECT_URL")
+  provider          = "postgresql"
+  url               = env("DATABASE_URL")
+  directUrl         = env("DIRECT_URL")
   shadowDatabaseUrl = env("SHADOW_DATABASE_URL")
 }
 
@@ -28,7 +28,6 @@ model User {
   phoneVerified       Boolean             @default(false)
   twoFactorEnabled    Boolean             @default(false)
   twoFactorSecret     String?
-  avaliacoes          Avaliacao[]
   carrinho            CartItem[]
   deviceFingerprints  DeviceFingerprint[]
   metodosPagamento    MetodoPagamento[]
@@ -60,7 +59,6 @@ model Produto {
   preco_promocional Decimal?         @db.Decimal(10, 2)
   desconto          Int?             @default(0)
   promocao_ativa    Boolean?         @default(false)
-  avaliacoes        Avaliacao[]
   cartItems         CartItem[]
   pedidoItens       PedidoItem[]
 
@@ -280,22 +278,6 @@ model DeviceFingerprint {
   @@map("device_fingerprints")
 }
 
-model Avaliacao {
-  id         String   @id @default(uuid())
-  nota       Int
-  titulo     String?
-  comentario String?
-  userId     String
-  produtoId  String
-  createdAt  DateTime @default(now())
-  produto    Produto  @relation(fields: [produtoId], references: [id])
-  user       User     @relation(fields: [userId], references: [id])
-
-  @@unique([userId, produtoId])
-  @@index([produtoId, nota])
-  @@map("avaliacoes")
-}
-
 model Notificacao {
   id        String          @id @default(uuid())
   tipo      TipoNotificacao
@@ -392,6 +374,4 @@ enum GatewayPagamento {
 
 enum CategoriaProduto {
   Feminino
-  Masculino
-  Acessorios
 }

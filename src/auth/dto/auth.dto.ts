@@ -1,4 +1,5 @@
-import { IsEmail, IsString, MinLength, IsNotEmpty, IsOptional } from 'class-validator';
+// src/auth/dto/auth.dto.ts
+import { IsEmail, IsString, MinLength, IsNotEmpty } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 
 export class RegisterDto {
@@ -16,9 +17,9 @@ export class RegisterDto {
   @IsNotEmpty()
   cpf!: string;
 
-  @ApiProperty({ example: 'senha123' })
+  @ApiProperty({ example: 'senha12345' })
   @IsString()
-  @MinLength(6, { message: 'A senha deve ter pelo menos 6 caracteres' })
+  @MinLength(8, { message: 'A senha deve ter pelo menos 8 caracteres' })
   senha!: string;
 
   @ApiProperty({ example: { rua: 'Rua A', numero: '123' } })
@@ -31,7 +32,7 @@ export class LoginDto {
   @IsEmail()
   email!: string;
 
-  @ApiProperty({ example: 'senha123' })
+  @ApiProperty({ example: 'senha12345' })
   @IsString()
   @IsNotEmpty()
   senha!: string;

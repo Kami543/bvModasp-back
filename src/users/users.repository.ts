@@ -1,7 +1,7 @@
-// src/users/users.repository.ts - VERSÃO CORRIGIDA
+// src/users/users.repository.ts
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import { User } from '@prisma/client';
+import { User, Role } from '@prisma/client';
 import { BaseRepository } from '../common/utils/baseRepository';
 
 @Injectable()
@@ -24,46 +24,34 @@ export class UserRepository extends BaseRepository<User> {
     return this.model.findUnique({ where: { cpf } });
   }
 
-  async findByRole(role: string, limit?: number): Promise<User[]> {
+  async findByRole(role: Role, limit?: number): Promise<User[]> {
     const take = limit ? Math.min(limit, 200) : undefined;
-    return this.model.findMany({ 
-      where: { role: role as any },
-      take
-    });
+    return this.model.findMany({ where: { role }, take });
   }
 
   async findAllAdmins(limit?: number): Promise<User[]> {
     const take = limit ? Math.min(limit, 100) : undefined;
-    return this.model.findMany({ 
-      where: { role: 'ADMIN' },
-      take
-    });
+    return this.model.findMany({ where: { role: Role.ADMIN }, take });
   }
 
   async findAllClients(limit?: number): Promise<User[]> {
     const take = limit ? Math.min(limit, 200) : undefined;
-    return this.model.findMany({ 
-      where: { role: 'USER' },
-      take
-    });
+    return this.model.findMany({ where: { role: Role.USER }, take });
   }
 
   async findActiveUsers(): Promise<User[]> {
     return this.model.findMany({
       where: {
-        OR: [
-          { lockedUntil: null },
-          { lockedUntil: { lt: new Date() } }
-        ]
+        OR: [{ lockedUntil: null }, { lockedUntil: { lt: new Date() } }],
       },
     });
   }
 
   async findByIds(ids: string[]): Promise<User[]> {
     if (!ids || ids.length === 0) return [];
-    return this.model.findMany({ 
+    return this.model.findMany({
       where: { id: { in: ids } },
-      take: 100
+      take: 100,
     });
   }
 
@@ -75,8 +63,8 @@ export class UserRepository extends BaseRepository<User> {
     return this.exists({ cpf });
   }
 
-  async countByRole(role: string): Promise<number> {
-    return this.prisma.user.count({ where: { role: role as any } });
+  async countByRole(role: Role): Promise<number> {
+    return this.prisma.user.count({ where: { role } });
   }
 
   async countPedidos(userId: string): Promise<number> {
@@ -98,7 +86,7 @@ export class UserRepository extends BaseRepository<User> {
     if (!userId) return [];
     const safeLimit = Math.min(limit, 50);
     const skip = (Math.max(1, page) - 1) * safeLimit;
-    
+
     return this.prisma.pedido.findMany({
       where: { userId },
       skip,
@@ -107,13 +95,10 @@ export class UserRepository extends BaseRepository<User> {
         itens: {
           include: {
             produto: {
-              // REMOVA este bloco de imagens (linha 114):
-              // include: {
-              //   imagens: { where: { isPrincipal: true }, take: 1, select: { url: true } }
-              // }
-            }
-          }
-        }
+              select: { id: true, nome: true, imagem: true, slug: true },
+            },
+          },
+        },
       },
       orderBy: { createdAt: 'desc' },
     });
@@ -122,26 +107,28 @@ export class UserRepository extends BaseRepository<User> {
   async findCarrinhoByUserId(userId: string, limit?: number): Promise<any> {
     if (!userId) return [];
     const take = limit ? Math.min(limit, 100) : undefined;
-    
+
     return this.prisma.cartItem.findMany({
       where: { userId },
       take,
-      include: { 
+      include: {
         produto: {
-          // REMOVA este bloco de imagens (linha 134):
-          // include: {
-          //   imagens: { where: { isPrincipal: true }, take: 1, select: { url: true } }
-          // }
-        }
+          select: { id: true, nome: true, imagem: true, slug: true, preco: true },
+        },
       },
     });
   }
 
-  async findNotificacoesByUserId(userId: string, lidas: boolean = false, page: number = 1, limit: number = 20) {
+  async findNotificacoesByUserId(
+    userId: string,
+    lidas: boolean = false,
+    page: number = 1,
+    limit: number = 20,
+  ) {
     if (!userId) return [];
     const safeLimit = Math.min(limit, 50);
     const skip = (Math.max(1, page) - 1) * safeLimit;
-    
+
     return this.prisma.notificacao.findMany({
       where: { userId, lida: lidas },
       skip,
@@ -154,7 +141,7 @@ export class UserRepository extends BaseRepository<User> {
     if (!id) throw new Error('ID obrigatório');
     return this.model.update({
       where: { id },
-      data: { lastLoginAt: new Date(), lastLoginIp: ip, failedLoginAttempts: 0 }
+      data: { lastLoginAt: new Date(), lastLoginIp: ip, failedLoginAttempts: 0 },
     });
   }
 
@@ -162,7 +149,7 @@ export class UserRepository extends BaseRepository<User> {
     if (!id) throw new Error('ID obrigatório');
     return this.model.update({
       where: { id },
-      data: { failedLoginAttempts: { increment: 1 } }
+      data: { failedLoginAttempts: { increment: 1 } },
     });
   }
 
@@ -172,7 +159,7 @@ export class UserRepository extends BaseRepository<User> {
     lockedUntil.setMinutes(lockedUntil.getMinutes() + Math.min(durationMinutes, 1440));
     return this.model.update({
       where: { id },
-      data: { lockedUntil, failedLoginAttempts: 0 }
+      data: { lockedUntil, failedLoginAttempts: 0 },
     });
   }
 
@@ -180,7 +167,7 @@ export class UserRepository extends BaseRepository<User> {
     if (!id || !secret) throw new Error('ID e secret obrigatórios');
     return this.model.update({
       where: { id },
-      data: { twoFactorEnabled: true, twoFactorSecret: secret }
+      data: { twoFactorEnabled: true, twoFactorSecret: secret },
     });
   }
 
@@ -188,14 +175,14 @@ export class UserRepository extends BaseRepository<User> {
     if (!id) throw new Error('ID obrigatório');
     return this.model.update({
       where: { id },
-      data: { twoFactorEnabled: false, twoFactorSecret: null }
+      data: { twoFactorEnabled: false, twoFactorSecret: null },
     });
   }
 
   async findWithPedidos(id: string, limit: number = 10) {
     if (!id) throw new NotFoundException('ID obrigatório');
     const safeLimit = Math.min(limit, 20);
-    
+
     const user = await this.model.findUnique({
       where: { id },
       include: {
@@ -206,43 +193,41 @@ export class UserRepository extends BaseRepository<User> {
             itens: {
               include: {
                 produto: {
-                  // REMOVA este bloco de imagens (linha 211):
-                  // include: {
-                  //   imagens: { where: { isPrincipal: true }, take: 1, select: { url: true } }
-                  // }
-                }
-              }
-            }
-          }
-        }
-      }
+                  select: { id: true, nome: true, imagem: true, slug: true },
+                },
+              },
+            },
+          },
+        },
+      },
     });
-    
+
     if (!user) throw new NotFoundException('Usuário não encontrado');
     return user;
   }
 
   async getDashboardStats(userId: string) {
     if (!userId) return null;
-    
-    const [pedidosCount, carrinhoCount, notificacoesCount, ultimoPedido, user] = await Promise.all([
-      this.countPedidos(userId),
-      this.countCarrinho(userId),
-      this.countNotificacoesNaoLidas(userId),
-      this.prisma.pedido.findFirst({
-        where: { userId },
-        orderBy: { createdAt: 'desc' },
-        select: { createdAt: true, total: true, status: true }
-      }),
-      this.findById(userId).catch(() => null)
-    ]);
 
-    return { 
-      pedidosCount, 
-      carrinhoCount, 
-      notificacoesCount, 
-      ultimoPedido, 
-      membroDesde: user?.createdAt 
+    const [pedidosCount, carrinhoCount, notificacoesCount, ultimoPedido, user] =
+      await Promise.all([
+        this.countPedidos(userId),
+        this.countCarrinho(userId),
+        this.countNotificacoesNaoLidas(userId),
+        this.prisma.pedido.findFirst({
+          where: { userId },
+          orderBy: { createdAt: 'desc' },
+          select: { createdAt: true, total: true, status: true },
+        }),
+        this.findById(userId).catch(() => null),
+      ]);
+
+    return {
+      pedidosCount,
+      carrinhoCount,
+      notificacoesCount,
+      ultimoPedido,
+      membroDesde: user?.createdAt,
     };
   }
 }

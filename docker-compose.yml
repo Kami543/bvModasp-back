@@ -1,165 +1,64 @@
+version: '3.9'
+
 services:
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    container_name: bvmodas-api
+    restart: unless-stopped
+    ports:
+      - '3001:3001'
+    env_file:
+      - .env
+    volumes:
+      # Código fonte montado (hot reload)
+      - ./src:/app/src
+      - ./prisma:/app/prisma
+      # node_modules NÃO é montado (fica da imagem)
+      - /app/node_modules
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - bvmodas-net
+    command: sh -c "npx prisma migrate deploy && npm run start:dev"
+
   postgres:
     image: postgres:16-alpine
-    container_name: laboure_postgres
-    environment:
-      POSTGRES_DB: ${DB_NAME:-laboure_db}
-      POSTGRES_USER: ${DB_USER:-postgres}
-      POSTGRES_PASSWORD: ${DB_PASSWORD:-postgres123}
-      POSTGRES_INITDB_ARGS: "--encoding=UTF8"
-      PGDATA: /var/lib/postgresql/data/pgdata
+    container_name: bvmodas-postgres
+    restart: unless-stopped
     ports:
-      - "5432:5432"
+      - '5432:5432'
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: bvmodas
     volumes:
-      - postgres_data:/var/lib/postgresql/data
-      - ./scripts/init.sql:/docker-entrypoint-initdb.d/init.sql
-    networks:
-      - laboure_network
+      - postgres-data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-postgres} -d ${DB_NAME:-laboure_db}"]
+      test: ['CMD-SHELL', 'pg_isready -U postgres']
       interval: 10s
       timeout: 5s
       retries: 5
-    restart: unless-stopped
+    networks:
+      - bvmodas-net
 
   redis:
     image: redis:7-alpine
-    container_name: laboure_redis
-    command: >
-      redis-server
-      --appendonly yes
-      --appendfsync everysec
-      --requirepass ${REDIS_PASSWORD:-redis123}
-      --maxmemory 256mb
-      --maxmemory-policy allkeys-lru
-      --save 900 1
-      --save 300 10
-      --save 60 10000
+    container_name: bvmodas-redis
+    restart: unless-stopped
     ports:
-      - "6379:6379"
+      - '6379:6379'
     volumes:
-      - redis_data:/data
+      - redis-data:/data
     networks:
-      - laboure_network
-    healthcheck:
-      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD:-redis123}", "ping"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-    restart: unless-stopped
-    logging:
-      driver: "json-file"
-      options:
-        max-size: "10mb"
-        max-file: "3"
-
-  app:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    container_name: laboure_app
-    environment:
-      NODE_ENV: ${NODE_ENV:-production}
-      DATABASE_URL: postgresql://${DB_USER:-postgres}:${DB_PASSWORD:-postgres123}@postgres:5432/${DB_NAME:-laboure_db}
-      REDIS_HOST: redis
-      REDIS_PORT: 6379
-      REDIS_PASSWORD: ${REDIS_PASSWORD:-redis123}
-      REDIS_DB: 0
-      REDIS_PREFIX: "laboure:"
-      NEXTAUTH_SECRET: ${NEXTAUTH_SECRET:-your-secret-key-change-in-production}
-      NEXTAUTH_URL: ${NEXTAUTH_URL:-http://localhost:3000}
-      API_URL: ${API_URL:-http://localhost:3000}
-    ports:
-      - "3000:3000"
-    depends_on:
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-    networks:
-      - laboure_network
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
-      interval: 30s
-      timeout: 3s
-      retries: 3
-
-  worker:
-    build:
-      context: .
-      dockerfile: Dockerfile.worker
-    environment:
-      NODE_ENV: ${NODE_ENV:-production}
-      DATABASE_URL: postgresql://${DB_USER:-postgres}:${DB_PASSWORD:-postgres123}@postgres:5432/${DB_NAME:-laboure_db}
-      REDIS_HOST: redis
-      REDIS_PORT: 6379
-      REDIS_PASSWORD: ${REDIS_PASSWORD:-redis123}
-      REDIS_DB: 0
-      REDIS_PREFIX: "laboure:"
-      WORKER_TYPE: ${WORKER_TYPE:-default}
-      PAYMENT_CONCURRENCY: ${PAYMENT_CONCURRENCY:-5}
-    depends_on:
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-    networks:
-      - laboure_network
-    restart: unless-stopped
-    deploy:
-      replicas: 2
-      resources:
-        limits:
-          memory: 512M
-        reservations:
-          memory: 256M
-
-  redis-commander:
-    image: rediscommander/redis-commander:latest
-    container_name: laboure_redis_commander
-    environment:
-      REDIS_HOSTS: local:redis:6379
-      REDIS_PASSWORD: ${REDIS_PASSWORD:-redis123}
-    ports:
-      - "8081:8081"
-    depends_on:
-      redis:
-        condition: service_healthy
-    networks:
-      - laboure_network
-    restart: unless-stopped
-    profiles:
-      - monitoring
-
-  pgadmin:
-    image: dpage/pgadmin4:latest
-    container_name: laboure_pgadmin
-    environment:
-      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_EMAIL:-admin@laboure.com}
-      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_PASSWORD:-admin123}
-      PGADMIN_CONFIG_SERVER_MODE: 'False'
-      PGADMIN_CONFIG_MASTER_PASSWORD_REQUIRED: 'False'
-    ports:
-      - "5050:80"
-    depends_on:
-      - postgres
-    volumes:
-      - pgadmin_data:/var/lib/pgadmin
-    networks:
-      - laboure_network
-    restart: unless-stopped
-    profiles:
-      - debug
-
-networks:
-  laboure_network:
-    driver: bridge
+      - bvmodas-net
 
 volumes:
-  postgres_data:
-    driver: local
-  pgadmin_data:
-    driver: local
-  redis_data:
-    driver: local
+  postgres-data:
+  redis-data:
+
+networks:
+  bvmodas-net:
+    driver: bridge

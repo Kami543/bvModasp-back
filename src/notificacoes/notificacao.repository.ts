@@ -1,4 +1,4 @@
-// src/modules/notificacoes/notificacao.repository.ts
+// src/notificacoes/notificacao.repository.ts
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { Notificacao, TipoNotificacao } from '@prisma/client';
@@ -67,24 +67,12 @@ export class NotificacaoRepository {
   }
 
   async delete(id: string): Promise<Notificacao> {
+    // ⚠️ Sem checagem de dono — o service valida antes com findByIdAndUser
     return this.model.delete({ where: { id } });
   }
 
   async deleteAllRead(userId: string): Promise<{ count: number }> {
     return this.model.deleteMany({ where: { userId, lida: true } });
-  }
-
-  async bulkCreate(
-    notificacoes: Array<{
-      userId: string;
-      tipo: TipoNotificacao;
-      titulo: string;
-      mensagem: string;
-    }>,
-  ): Promise<Notificacao[]> {
-    return this.prisma.$transaction(
-      notificacoes.map((n) => this.model.create({ data: n })),
-    );
   }
 
   async getStats(userId: string): Promise<{
@@ -95,21 +83,22 @@ export class NotificacaoRepository {
   }> {
     const umaSemanaAtras = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
 
-    const [total, naoLidas, ultimasSemana, notificacoes] = await Promise.all([
+    const [total, naoLidas, ultimasSemana, porTipo] = await Promise.all([
       this.model.count({ where: { userId } }),
       this.model.count({ where: { userId, lida: false } }),
       this.model.count({
         where: { userId, createdAt: { gte: umaSemanaAtras } },
       }),
-      this.model.findMany({
+      this.model.groupBy({
+        by: ['tipo'],
         where: { userId },
-        select: { tipo: true },
+        _count: { tipo: true },
       }),
     ]);
 
-    const totalPorTipo = notificacoes.reduce<Record<string, number>>(
-      (acc, { tipo }) => {
-        acc[tipo] = (acc[tipo] ?? 0) + 1;
+    const totalPorTipo = porTipo.reduce<Record<string, number>>(
+      (acc, item) => {
+        acc[item.tipo] = item._count.tipo;
         return acc;
       },
       {},

@@ -1,44 +1,59 @@
-# Dockerfile - SEM .env (RECOMENDADO PARA RENDER)
-FROM node:20-alpine AS builder
+# ─────────────────────────────────────────────
+# Stage 1 — deps
+# ─────────────────────────────────────────────
+FROM node:20-alpine AS deps
 
 WORKDIR /app
 
-RUN apk add --no-cache python3 make g++ openssl
+RUN apk add --no-cache openssl
 
 COPY package*.json ./
 COPY prisma ./prisma/
-COPY nest-cli.json ./
-COPY tsconfig*.json ./
 
-RUN npm ci
+RUN npm ci --only=production && \
+    npx prisma generate
 
-COPY src ./src
-
-RUN npx prisma generate
-RUN npm run build
-
-RUN if [ ! -d "/app/dist" ]; then \
-    echo "❌ Build falhou"; \
-    exit 1; \
-fi
-
-# ============================================
-FROM node:20-alpine AS runner
-
-RUN addgroup -S nestjs && adduser -S nestjs -G nestjs
+# ─────────────────────────────────────────────
+# Stage 2 — build
+# ─────────────────────────────────────────────
+FROM node:20-alpine AS build
 
 WORKDIR /app
 
-COPY --from=builder --chown=nestjs:nestjs /app/package*.json ./
-COPY --from=builder --chown=nestjs:nestjs /app/node_modules ./node_modules
-COPY --from=builder --chown=nestjs:nestjs /app/dist ./dist
-COPY --from=builder --chown=nestjs:nestjs /app/prisma ./prisma
+RUN apk add --no-cache openssl
 
-USER nestjs
+COPY package*.json ./
+COPY prisma ./prisma/
+
+RUN npm ci
+
+COPY tsconfig*.json nest-cli.json ./
+COPY src ./src/
+
+RUN npx prisma generate && \
+    npm run build
+
+# ─────────────────────────────────────────────
+# Stage 3 — runtime
+# ─────────────────────────────────────────────
+FROM node:20-alpine AS runtime
+
+WORKDIR /app
+
+RUN apk add --no-cache openssl curl
 
 ENV NODE_ENV=production
-ENV PORT=10000
+ENV PORT=3001
 
-EXPOSE 10000
+# Copia só o necessário
+COPY --from=deps  /app/node_modules ./node_modules
+COPY --from=build /app/dist         ./dist
+COPY --from=build /app/prisma       ./prisma
+COPY package*.json ./
 
-CMD ["node", "dist/main.js"]
+EXPOSE 3001
+
+HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
+  CMD curl -f http://localhost:3001/api/v1/health || exit 1
+
+CMD ["sh", "-c", "npx prisma migrate deploy && node dist/main.js"]

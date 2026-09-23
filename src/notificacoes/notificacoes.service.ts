@@ -24,13 +24,13 @@ export class NotificacoesService {
     limit?: number,
     apenasNaoLidas?: boolean,
   ) {
-    const pageNum = Number(page) || 1;
-    const limitNum = Number(limit) || 20;
+    const pageNum = Math.max(1, Number(page) || 1);
+    const limitNum = Math.min(Math.max(1, Number(limit) || 20), 100);
     const skip = (pageNum - 1) * limitNum;
 
     const [data, total, naoLidas] = await Promise.all([
       this.notificacaoRepository.findByUser(userId, apenasNaoLidas, skip, limitNum),
-      this.notificacaoRepository.countByUser(userId),
+      this.notificacaoRepository.countByUser(userId, apenasNaoLidas), // ← repassa filtro
       this.notificacaoRepository.countNaoLidas(userId),
     ]);
 
@@ -40,7 +40,6 @@ export class NotificacoesService {
       page: pageNum,
       limit: limitNum,
       naoLidas,
-      mensagem: `Você tem ${naoLidas} ${naoLidas === 1 ? 'notificação não lida' : 'notificações não lidas'}`,
     };
   }
 

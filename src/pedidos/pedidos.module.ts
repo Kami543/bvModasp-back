@@ -1,11 +1,11 @@
-import { Module } from '@nestjs/common';
-import { PedidosController } from './pedidos.controller'; // ← Adicione esta linha
+// src/pedidos/pedidos.module.ts
+import { Module, forwardRef } from '@nestjs/common';
+import { PedidosController } from './pedidos.controller';
 import { PedidosService } from './pedidos.service';
 import { PedidoRepository } from './pedido.repository';
 import { CartRepository } from '../cart/cart.repository';
 import { ProdutoRepository } from '../produto/produto.repository';
-import { NotificacoesService } from '../notificacoes/notificacoes.service';
-import { NotificacaoRepository } from '../notificacoes/notificacao.repository';
+import { NotificacoesModule } from '../notificacoes/notificacoes.module';
 import { UserModule } from '../users/users.module';
 import { PrismaModule } from '../prisma/prisma.module';
 
@@ -13,15 +13,14 @@ import { PrismaModule } from '../prisma/prisma.module';
   imports: [
     PrismaModule,
     UserModule,
+    forwardRef(() => NotificacoesModule),
   ],
-  controllers: [PedidosController], // ← Adicione esta linha (importante!)
+  controllers: [PedidosController],
   providers: [
     PedidosService,
     PedidoRepository,
     CartRepository,
     ProdutoRepository,
-    NotificacoesService,
-    NotificacaoRepository,
   ],
   exports: [PedidosService],
 })

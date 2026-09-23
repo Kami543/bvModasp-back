@@ -1,4 +1,14 @@
-import { IsString, IsEmail, IsOptional, IsEnum, MinLength, ValidateNested, IsObject, IsNotEmpty } from 'class-validator';
+import {
+  IsString,
+  IsEmail,
+  IsOptional,
+  IsEnum,
+  MinLength,
+  ValidateNested,
+  IsObject,
+  Matches,
+  Length,
+} from 'class-validator';
 import { Type } from 'class-transformer';
 
 export enum UserRole {
@@ -6,7 +16,9 @@ export enum UserRole {
   ADMIN = 'ADMIN',
 }
 
-// DTO para o objeto endereço (armazenado como JSON no banco)
+// ─────────────────────────────────────────────────────────────
+// ENDEREÇO
+// ─────────────────────────────────────────────────────────────
 export class EnderecoDto {
   @IsString({ message: 'Rua é obrigatória' })
   rua: string;
@@ -18,17 +30,23 @@ export class EnderecoDto {
   @IsString({ message: 'Complemento deve ser texto' })
   complemento?: string;
 
+  @IsString({ message: 'Bairro é obrigatório' })
+  bairro: string;
+
   @IsString({ message: 'Cidade é obrigatória' })
   cidade: string;
 
-  @IsString({ message: 'Estado é obrigatório' })
+  @Length(2, 2, { message: 'Estado deve ter 2 letras (sigla UF)' })
+  @Matches(/^[A-Z]{2}$/, { message: 'Estado deve ser a sigla em maiúsculas (ex: SP)' })
   estado: string;
 
-  @IsString({ message: 'CEP é obrigatório' })
+  @Matches(/^\d{5}-?\d{3}$/, { message: 'CEP inválido (use 00000-000)' })
   cep: string;
 }
 
-// DTO para criação de usuário
+// ─────────────────────────────────────────────────────────────
+// CREATE — sem `role` (usuário criado sempre é USER)
+// ─────────────────────────────────────────────────────────────
 export class CreateUserDto {
   @IsString({ message: 'Nome deve ser uma string' })
   nome: string;
@@ -36,24 +54,24 @@ export class CreateUserDto {
   @IsEmail({}, { message: 'Email inválido' })
   email: string;
 
-  @IsString({ message: 'CPF deve ser uma string' })
+  @Matches(/^\d{3}\.\d{3}\.\d{3}-\d{2}$|^\d{11}$/, {
+    message: 'CPF inválido (use 000.000.000-00 ou 11 dígitos)',
+  })
   cpf: string;
 
   @IsString({ message: 'Senha deve ser uma string' })
-  @MinLength(6, { message: 'Senha deve ter no mínimo 6 caracteres' })
+  @MinLength(8, { message: 'Senha deve ter no mínimo 8 caracteres' })
   senha: string;
 
   @ValidateNested()
   @Type(() => EnderecoDto)
   @IsObject({ message: 'Endereço deve ser um objeto válido' })
   endereco: EnderecoDto;
-
-  @IsEnum(UserRole, { message: 'Role deve ser USER ou ADMIN' })
-  @IsOptional()
-  role?: UserRole;
 }
 
-// DTO para atualização de usuário (todos os campos opcionais)
+// ─────────────────────────────────────────────────────────────
+// UPDATE — role só editável por admin (checado no service)
+// ─────────────────────────────────────────────────────────────
 export class UpdateUserDto {
   @IsString({ message: 'Nome deve ser uma string' })
   @IsOptional()
@@ -63,12 +81,14 @@ export class UpdateUserDto {
   @IsOptional()
   email?: string;
 
-  @IsString({ message: 'CPF deve ser uma string' })
+  @Matches(/^\d{3}\.\d{3}\.\d{3}-\d{2}$|^\d{11}$/, {
+    message: 'CPF inválido',
+  })
   @IsOptional()
   cpf?: string;
 
   @IsString({ message: 'Senha deve ser uma string' })
-  @MinLength(6, { message: 'Senha deve ter no mínimo 6 caracteres' })
+  @MinLength(8, { message: 'Senha deve ter no mínimo 8 caracteres' })
   @IsOptional()
   senha?: string;
 
@@ -83,11 +103,9 @@ export class UpdateUserDto {
   role?: UserRole;
 }
 
-// ============================================
-// ⭐ NOVAS CLASSES ADICIONADAS ABAIXO ⭐
-// ============================================
-
-// DTO de resposta básica (sem estatísticas)
+// ─────────────────────────────────────────────────────────────
+// RESPONSE
+// ─────────────────────────────────────────────────────────────
 export class UserResponseDto {
   id: string;
   nome: string;
@@ -104,16 +122,15 @@ export class UserResponseDto {
     this.email = user.email;
     this.cpf = user.cpf;
     this.role = user.role;
-    // Converte o JSON do Prisma para o objeto EnderecoDto
-    this.endereco = typeof user.endereco === 'string' 
-      ? JSON.parse(user.endereco) 
-      : user.endereco as EnderecoDto;
+    this.endereco =
+      typeof user.endereco === 'string'
+        ? JSON.parse(user.endereco)
+        : (user.endereco as EnderecoDto);
     this.createdAt = user.createdAt;
     this.updatedAt = user.updatedAt;
   }
 }
 
-// DTO de resposta com estatísticas adicionais (para detalhes do usuário)
 export class UserDetailResponseDto extends UserResponseDto {
   pedidosTotal: number;
   carrinhoTotal: number;

@@ -6,9 +6,9 @@ import {
   BadRequestException,
   ConflictException,
   ForbiddenException,
+  ServiceUnavailableException,
 } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
-import { Prisma } from '@prisma/client';
 
 export interface BaseEntity {
   id: string | number;
@@ -20,8 +20,6 @@ export interface BaseEntity {
 export interface PaginationOptions {
   page?: number;
   limit?: number;
-  include?: any;
-  select?: any;
   orderBy?: any;
   maxLimit?: number;
   where?: any;
@@ -39,28 +37,22 @@ export interface PaginationResult<T> {
 export abstract class BaseRepository<T extends BaseEntity> {
   protected readonly DEFAULT_MAX_LIMIT = 50;
   protected readonly DEFAULT_LIMIT = 10;
-  protected readonly MAX_INCLUDE_DEPTH = 2;
-  protected readonly QUERY_TIMEOUT_MS = 10000;
 
   constructor(protected readonly prisma: PrismaService) {}
 
   protected abstract get model(): any;
 
-  async create(data: any, include?: any): Promise<T> {
+  async create(data: any): Promise<T> {
     try {
-      const result = await this.model.create({ data });
-      return result as T;
+      return (await this.model.create({ data })) as T;
     } catch (error) {
       this.handlePrismaError(error, 'criar registro');
     }
   }
 
-  async findById(id: string | number, include?: any): Promise<T | null> {
+  async findById(id: string | number): Promise<T | null> {
     try {
-      const result = await this.model.findUnique({
-        where: { id: this.normalizeId(id) },
-      });
-      return result as T | null;
+      return (await this.model.findUnique({ where: { id } })) as T | null;
     } catch (error) {
       this.handlePrismaError(error, 'buscar registro por ID');
     }
@@ -69,18 +61,19 @@ export abstract class BaseRepository<T extends BaseEntity> {
   async findAll(options?: PaginationOptions): Promise<PaginationResult<T>> {
     try {
       const maxLimit = options?.maxLimit || this.DEFAULT_MAX_LIMIT;
-      let limit = Math.min(options?.limit || this.DEFAULT_LIMIT, maxLimit);
+      const limit = Math.min(options?.limit || this.DEFAULT_LIMIT, maxLimit);
       const page = Math.max(options?.page || 1, 1);
       const skip = (page - 1) * limit;
+      const where = options?.where || {};
 
       const [data, total] = await Promise.all([
         this.model.findMany({
-          where: options?.where || {},
+          where,
           skip,
           take: limit,
           orderBy: options?.orderBy || { createdAt: 'desc' },
         }),
-        this.model.count({ where: options?.where || {} }),
+        this.model.count({ where }),
       ]);
 
       return {
@@ -98,18 +91,19 @@ export abstract class BaseRepository<T extends BaseEntity> {
   async findMany(where?: any, options?: PaginationOptions): Promise<PaginationResult<T>> {
     try {
       const maxLimit = options?.maxLimit || this.DEFAULT_MAX_LIMIT;
-      let limit = Math.min(options?.limit || this.DEFAULT_LIMIT, maxLimit);
+      const limit = Math.min(options?.limit || this.DEFAULT_LIMIT, maxLimit);
       const page = Math.max(options?.page || 1, 1);
       const skip = (page - 1) * limit;
+      const filter = where || {};
 
       const [data, total] = await Promise.all([
         this.model.findMany({
-          where: where || {},
+          where: filter,
           skip,
           take: limit,
           orderBy: options?.orderBy || { createdAt: 'desc' },
         }),
-        this.model.count({ where: where || {} }),
+        this.model.count({ where: filter }),
       ]);
 
       return {
@@ -124,22 +118,17 @@ export abstract class BaseRepository<T extends BaseEntity> {
     }
   }
 
-  async findFirst(where: any, include?: any): Promise<T | null> {
+  async findFirst(where: any): Promise<T | null> {
     try {
-      const result = await this.model.findFirst({ where });
-      return result as T | null;
+      return (await this.model.findFirst({ where })) as T | null;
     } catch (error) {
       this.handlePrismaError(error, 'buscar o primeiro registro');
     }
   }
 
-  async update(id: string | number, data: any, include?: any): Promise<T> {
+  async update(id: string | number, data: any): Promise<T> {
     try {
-      const result = await this.model.update({
-        where: { id: this.normalizeId(id) },
-        data,
-      });
-      return result as T;
+      return (await this.model.update({ where: { id }, data })) as T;
     } catch (error) {
       this.handlePrismaError(error, 'atualizar registro');
     }
@@ -147,10 +136,7 @@ export abstract class BaseRepository<T extends BaseEntity> {
 
   async delete(id: string | number): Promise<T> {
     try {
-      const result = await this.model.delete({
-        where: { id: this.normalizeId(id) },
-      });
-      return result as T;
+      return (await this.model.delete({ where: { id } })) as T;
     } catch (error) {
       this.handlePrismaError(error, 'deletar registro');
     }
@@ -162,6 +148,13 @@ export abstract class BaseRepository<T extends BaseEntity> {
         throw new BadRequestException('Delete em massa requer filtros específicos');
       }
 
+      const count = await this.model.count({ where });
+      if (count > maxDeletions) {
+        throw new BadRequestException(
+          `Delete em massa limitado a ${maxDeletions} registros. Encontrados: ${count}`,
+        );
+      }
+
       const result = await this.model.deleteMany({ where });
       return { count: result.count };
     } catch (error) {
@@ -171,11 +164,10 @@ export abstract class BaseRepository<T extends BaseEntity> {
 
   async softDelete(id: string | number): Promise<T> {
     try {
-      const result = await this.model.update({
-        where: { id: this.normalizeId(id) },
+      return (await this.model.update({
+        where: { id },
         data: { deletedAt: new Date() },
-      });
-      return result as T;
+      })) as T;
     } catch (error) {
       this.handlePrismaError(error, 'deletar registro (soft delete)');
     }
@@ -185,6 +177,13 @@ export abstract class BaseRepository<T extends BaseEntity> {
     try {
       if (!where || Object.keys(where).length === 0) {
         throw new BadRequestException('Soft delete em massa requer filtros específicos');
+      }
+
+      const count = await this.model.count({ where });
+      if (count > maxDeletions) {
+        throw new BadRequestException(
+          `Soft delete limitado a ${maxDeletions} registros. Encontrados: ${count}`,
+        );
       }
 
       const result = await this.model.updateMany({
@@ -197,14 +196,9 @@ export abstract class BaseRepository<T extends BaseEntity> {
     }
   }
 
-  async upsert(where: any, create: any, update: any, include?: any): Promise<T> {
+  async upsert(where: any, create: any, update: any): Promise<T> {
     try {
-      const result = await this.model.upsert({
-        where,
-        create,
-        update,
-      });
-      return result as T;
+      return (await this.model.upsert({ where, create, update })) as T;
     } catch (error) {
       this.handlePrismaError(error, 'criar ou atualizar registro');
     }
@@ -212,47 +206,58 @@ export abstract class BaseRepository<T extends BaseEntity> {
 
   async exists(where: any): Promise<boolean> {
     try {
-      const count = await this.model.count({ where, take: 1 });
+      const count = await this.model.count({ where });
       return count > 0;
     } catch (error) {
       this.handlePrismaError(error, 'verificar existência do registro');
     }
   }
 
-  async count(where?: any, maxCount = 100000): Promise<number> {
+  async count(where?: any): Promise<number> {
     try {
-      const count = await this.model.count({ where: where || {} });
-      return Math.min(count, maxCount);
+      return await this.model.count({ where: where || {} });
     } catch (error) {
       this.handlePrismaError(error, 'contar registros');
     }
   }
 
-  private normalizeId(id: string | number): string | number {
-    if (typeof id === 'string' && /^\d+$/.test(id)) {
-      return parseInt(id, 10);
-    }
-    return id;
-  }
-
   protected handlePrismaError(error: any, operation: string): never {
-    if (error instanceof Prisma.PrismaClientKnownRequestError) {
-      switch (error.code) {
-        case 'P2002':
-          throw new ConflictException(`Registro duplicado.`);
-        case 'P2003':
-          throw new BadRequestException(`Violação de chave estrangeira.`);
+    // Re-lança exceções Nest (evita embrulhar duas vezes)
+    if (
+      error instanceof NotFoundException ||
+      error instanceof BadRequestException ||
+      error instanceof ConflictException ||
+      error instanceof ForbiddenException ||
+      error instanceof ServiceUnavailableException
+    ) {
+      throw error;
+    }
+
+    const code = error?.code;
+    if (typeof code === 'string' && code.startsWith('P')) {
+      switch (code) {
+        case 'P2000':
+          throw new BadRequestException('Valor muito longo.');
         case 'P2001':
         case 'P2025':
-          throw new NotFoundException(`Registro não encontrado.`);
-        case 'P2000':
-          throw new BadRequestException(`Valor muito longo.`);
+          throw new NotFoundException('Registro não encontrado.');
+        case 'P2002':
+          throw new ConflictException('Registro duplicado.');
+        case 'P2003':
+          throw new BadRequestException('Violação de chave estrangeira.');
         case 'P2011':
-          throw new BadRequestException(`Campo obrigatório não pode ser nulo.`);
+          throw new BadRequestException('Campo obrigatório não pode ser nulo.');
+        case 'P2024':
+          throw new ServiceUnavailableException('Timeout de conexão com o banco.');
+        case 'P2028':
+          throw new ServiceUnavailableException('Timeout de transação.');
         default:
-          throw new InternalServerErrorException(`Erro ao ${operation}: ${error.message}`);
+          throw new InternalServerErrorException(
+            `Erro ao ${operation} (código ${code}).`,
+          );
       }
     }
+
     throw new InternalServerErrorException(`Erro inesperado ao ${operation}.`);
   }
 }
